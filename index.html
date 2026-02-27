@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KING • device verification</title>
+    <!-- theme exactly like the provided pictures -->
+    <!-- 
+        When opened via Telegram bot with web_app, the URL fragment contains:
+        https://my_domain.Vercel.app/verify/{Bot Name}#tgWebAppData=...
+        This page automatically extracts and parses the init data.
+        No user information is pre-filled in the source; it's dynamically loaded from the fragment.
+    -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: radial-gradient(circle at 30% 10%, #0b1424, #03050a);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* scanline effect */
+        body::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, rgba(0, 255, 180, 0.02) 0px, rgba(0, 0, 0, 0.4) 2px, transparent 3px, transparent 5px);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        body::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 70% 20%, rgba(20, 180, 255, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 480px;
+            background: rgba(8, 18, 28, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 255, 200, 0.25);
+            border-radius: 36px;
+            box-shadow: 0 25px 50px -8px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 255, 200, 0.1) inset, 0 0 20px rgba(0, 180, 255, 0.2);
+            padding: 24px 20px 30px;
+            position: relative;
+            z-index: 10;
+            color: #e2f0ff;
+        }
+
+        /* ID strip – dynamically filled from Telegram data, but NOT prefilled in HTML */
+        .id-strip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 20, 40, 0.7);
+            border: 1px solid #00c8b0;
+            border-radius: 60px;
+            padding: 10px 18px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 12px #00ffe1;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
+        .id-strip .user-name {
+            color: #b0ffe0;
+            font-size: 1.1rem;
+            text-shadow: 0 0 5px cyan;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .id-strip .user-id {
+            background: #001e1e;
+            padding: 5px 16px;
+            border-radius: 30px;
+            font-family: 'Fira Mono', monospace;
+            font-weight: 600;
+            color: #aaffdd;
+            border: 1px solid #2affc0;
+            font-size: 1rem;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 25px;
+            background: rgba(0, 30, 30, 0.5);
+            border-radius: 40px;
+            padding: 8px 16px 8px 20px;
+            width: fit-content;
+            border: 1px solid #0affb0;
+            box-shadow: 0 0 10px #00ffc3;
+        }
+
+        .status-led {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #0f0;
+            box-shadow: 0 0 12px #0f0, 0 0 20px #0f0;
+        }
+
+        .status-led.scan {
+            background: #ffaa33;
+            box-shadow: 0 0 12px #ffaa33, 0 0 20px #ffaa33;
+            animation: pulse 1.2s infinite;
+        }
+
+        .status-led.success {
+            background: #0effa0;
+            box-shadow: 0 0 12px #0effa0;
+        }
+
+        .status-text {
+            font-weight: 600;
+            font-size: 1.35rem;
+            letter-spacing: 1.5px;
+            color: #e0fff0;
+            text-shadow: 0 0 6px #0ff;
+        }
+
+        .screen {
+            background: rgba(0, 8, 15, 0.7);
+            border-radius: 28px;
+            padding: 22px 18px;
+            border: 1px solid #00eedd;
+            box-shadow: inset 0 0 15px rgba(0, 255, 200, 0.2), 0 8px 0 #001a1a;
+            margin-bottom: 28px;
+            backdrop-filter: blur(4px);
+        }
+
+        .line {
+            font-family: 'Fira Mono', 'Courier New', monospace;
+            font-size: 1.05rem;
+            margin: 14px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #b8ffe5;
+            border-left: 3px solid #0ff;
+            padding-left: 12px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 24px;
+            background: #031010;
+            border-radius: 40px;
+            border: 1px solid #0affb0;
+            padding: 3px;
+            margin: 20px 0 5px;
+            box-shadow: 0 0 8px #0ff;
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #aaffd0, #0ff);
+            border-radius: 40px;
+            transition: width 0.3s;
+            box-shadow: 0 0 10px cyan;
+        }
+
+        .verified-message {
+            font-size: 1.3rem;
+            font-weight: 600;
+            background: linear-gradient(145deg, #a0ffcf, #b0f0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 10px 0 5px;
+            filter: drop-shadow(0 0 12px #0ff);
+        }
+
+        .sub-message {
+            color: #ccffff;
+            font-size: 1rem;
+            opacity: 0.9;
+            margin-bottom: 12px;
+        }
+
+        .telegram-data-panel {
+            background: rgba(0, 30, 50, 0.5);
+            border-radius: 18px;
+            padding: 16px;
+            margin: 20px 0 10px;
+            border: 1px solid #0ff;
+            box-shadow: 0 0 12px #0ff3;
+            font-family: 'Fira Mono', monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .data-row {
+            display: flex;
+            padding: 6px 0;
+            border-bottom: 1px solid #0ff2;
+        }
+        .data-label {
+            color: #9fffd0;
+            min-width: 80px;
+        }
+        .data-value {
+            color: white;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        .continue-btn {
+            background: transparent;
+            border: 2px solid #0ff;
+            border-radius: 60px;
+            padding: 14px 20px;
+            width: 100%;
+            font-weight: 700;
+            font-size: 1.3rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #0ff;
+            text-shadow: 0 0 12px #0ff;
+            backdrop-filter: blur(10px);
+            transition: 0.15s;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .continue-btn:hover {
+            background: #0ff1;
+            border-color: #9fffff;
+            color: #ffffff;
+            box-shadow: 0 0 32px #0ff;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.15); background: #fff5b0; }
+            100% { opacity: 0.7; transform: scale(1); }
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            font-size: 0.75rem;
+            color: #3c6e70;
+            text-align: center;
+            border-top: 1px dashed #0ff3;
+            padding-top: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card" id="mainCard">
+
+        <!-- DYNAMIC ID STRIP – filled from Telegram data, no prefill -->
+        <div class="id-strip">
+            <span class="user-name" id="dynamicUserName">⚡ LOADING...</span>
+            <span class="user-id" id="dynamicUserId">[ID]</span>
+        </div>
+
+        <!-- SCANNING state (default) -->
+        <div id="scanningView" class="scanning-section">
+            <div class="status-badge">
+                <div class="status-led scan"></div>
+                <span class="status-text">SCANNING</span>
+            </div>
+            <div class="screen">
+                <div class="line">🔐 Verifying Device</div>
+                <div class="line">🔄 Establishing secure handshake...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="scanProgressFill" style="width: 10%;"></div>
+                </div>
+                <div class="line" style="border-left-color: #ffaa33;">📡 ANALYSIS IN PROGRESS</div>
+                <div class="small-note" id="percentHint">10%</div>
+            </div>
+        </div>
+
+        <!-- VERIFIED SUCCESSFULLY view (shown after verification) -->
+        <div id="verifiedView" class="verified-section hidden">
+            <div class="status-badge">
+                <div class="status-led success"></div>
+                <span class="status-text">ACTIVE</span>
+            </div>
+            <div class="screen">
+                <div class="verified-message">✅ Verified Successfully</div>
+                <div class="sub-message">Device verification complete. You can use our bot now.</div>
+                
+                <!-- Telegram Web App data display (parsed from URL fragment) -->
+                <div class="telegram-data-panel" id="telegramDataPanel">
+                    <div style="color:#0ff; margin-bottom:8px;">🔷 TELEGRAM INIT DATA</div>
+                    <div id="telegramDataContent"></div>
+                </div>
+            </div>
+            <button class="continue-btn" id="continueBotBtn">
+                <span>⟶</span> CONTINUE TO BOT <span>⟵</span>
+            </button>
+        </div>
+
+        <div class="footer-note">
+            ⚡ tgWebAppData parsed · no user prefill · Vercel ready
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ========== PARSE TELEGRAM WEB APP DATA FROM URL FRAGMENT ==========
+            // Expected URL format:
+            // https://my_domain.Vercel.app/verify/{Bot Name}#tgWebAppData=query_id=...&user=...&...
+            // No user information is pre-filled in HTML – everything comes from fragment.
+
+            function parseTelegramData() {
+                const hash = window.location.hash.substring(1); // remove leading '#'
+                if (!hash) {
+                    console.log('No fragment found');
+                    return null;
+                }
+
+                // The fragment is like: tgWebAppData=query_id=...&user=...&...
+                // First, extract everything after 'tgWebAppData=' if present
+                let dataString = hash;
+                if (hash.startsWith('tgWebAppData=')) {
+                    dataString = hash.substring('tgWebAppData='.length);
+                }
+
+                // Parse query string parameters
+                const params = new URLSearchParams(dataString);
+                
+                // Extract user object (URL encoded JSON)
+                const userParam = params.get('user');
+                let userData = null;
+                if (userParam) {
+                    try {
+                        userData = JSON.parse(decodeURIComponent(userParam));
+                    } catch (e) {
+                        console.error('Failed to parse user JSON', e);
+                    }
+                }
+
+                // Build result object
+                const result = {
+                    query_id: params.get('query_id'),
+                    user: userData,
+                    auth_date: params.get('auth_date'),
+                    signature: params.get('signature'),
+                    hash: params.get('hash'),
+                    tgWebAppVersion: params.get('tgWebAppVersion'),
+                    tgWebAppPlatform: params.get('tgWebAppPlatform'),
+                    tgWebAppThemeParams: params.get('tgWebAppThemeParams')
+                };
+                
+                // Also store raw params for display
+                result.rawParams = params;
+                return result;
+            }
+
+            // ========== UPDATE UI WITH TELEGRAM DATA ==========
+            function updateUIWithTelegramData(tgData) {
+                // Update ID strip (dynamic, no prefill)
+                const userNameEl = document.getElementById('dynamicUserName');
+                const userIdEl = document.getElementById('dynamicUserId');
+                
+                if (tgData && tgData.user) {
+                    const user = tgData.user;
+                    // Format name: first_name + last_name (if exists)
+                    let fullName = user.first_name || '';
+                    if (user.last_name) fullName += ' ' + user.last_name;
+                    userNameEl.textContent = fullName.trim() || 'TELEGRAM USER';
+                    userIdEl.textContent = user.id ? user.id.toString().slice(0,10) : '—';
+                } else {
+                    // Fallback placeholders (still not prefilled with real user info)
+                    userNameEl.textContent = '⚡ ENTER NAME';
+                    userIdEl.textContent = '[YOUR ID]';
+                }
+
+                // Fill telegram data panel
+                const panelContent = document.getElementById('telegramDataContent');
+                if (panelContent) {
+                    panelContent.innerHTML = ''; // clear
+                    
+                    if (!tgData) {
+                        panelContent.innerHTML = '<div class="data-row">⚠️ No Telegram data in URL fragment</div>';
+                        return;
+                    }
+
+                    // Show user info first if available
+                    if (tgData.user) {
+                        addDataRow(panelContent, 'User ID', tgData.user.id);
+                        addDataRow(panelContent, 'First Name', tgData.user.first_name);
+                        if (tgData.user.last_name) addDataRow(panelContent, 'Last Name', tgData.user.last_name);
+                        if (tgData.user.username) addDataRow(panelContent, 'Username', '@' + tgData.user.username);
+                        addDataRow(panelContent, 'Language', tgData.user.language_code);
+                    }
+                    
+                    // Show other params
+                    if (tgData.query_id) addDataRow(panelContent, 'Query ID', tgData.query_id.substring(0,15)+'…');
+                    if (tgData.auth_date) addDataRow(panelContent, 'Auth Date', tgData.auth_date);
+                    if (tgData.signature) addDataRow(panelContent, 'Signature', tgData.signature.substring(0,15)+'…');
+                    if (tgData.hash) addDataRow(panelContent, 'Hash', tgData.hash.substring(0,15)+'…');
+                    if (tgData.tgWebAppPlatform) addDataRow(panelContent, 'Platform', tgData.tgWebAppPlatform);
+                    if (tgData.tgWebAppVersion) addDataRow(panelContent, 'Version', tgData.tgWebAppVersion);
+                }
+            }
+
+            function addDataRow(container, label, value) {
+                if (!value) return;
+                const row = document.createElement('div');
+                row.className = 'data-row';
+                row.innerHTML = `<span class="data-label">${label}</span><span class="data-value">${value}</span>`;
+                container.appendChild(row);
+            }
+
+            // ========== FETCH USAGE DETAILS (simulated) ==========
+            function fetchUsageDetails() {
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        const used = (Math.random() * 350).toFixed(1);
+                        const total = 500;
+                        const percentage = ((used / total) * 100).toFixed(1);
+                        const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB');
+                        
+                        resolve({
+                            apiCalls: used,
+                            totalLimit: total,
+                            percentage: percentage,
+                            expiryDate: expiry,
+                            plan: Math.random() > 0.5 ? 'PREMIUM' : 'BASIC',
+                            session: 'sess_' + Math.random().toString(36).substring(2, 8)
+                        });
+                    }, 800);
+                });
+            }
+
+            // ========== VIEW MANAGEMENT ==========
+            const scanningView = document.getElementById('scanningView');
+            const verifiedView = document.getElementById('verifiedView');
+            const progressFill = document.getElementById('scanProgressFill');
+            const percentHint = document.getElementById('percentHint');
+            
+            function setActiveView(view) {
+                scanningView.classList.add('hidden');
+                verifiedView.classList.add('hidden');
+                
+                if (view === 'scan') {
+                    scanningView.classList.remove('hidden');
+                    if (progressFill) progressFill.style.width = '10%';
+                    if (percentHint) percentHint.innerText = '10%';
+                } else if (view === 'verified') {
+                    verifiedView.classList.remove('hidden');
+                }
+            }
+
+            // ========== INITIALIZE PAGE ==========
+            window.addEventListener('load', () => {
+                // Parse Telegram data from URL fragment
+                const tgData = parseTelegramData();
+                console.log('Telegram data:', tgData);
+                
+                // Update UI with parsed data (ID strip and panel)
+                updateUIWithTelegramData(tgData);
+                
+                // Start with scanning view
+                setActiveView('scan');
+                
+                // After 2 seconds, move to verified and show data
+                setTimeout(() => {
+                    setActiveView('verified');
+                    // Optionally fetch usage (can be added here)
+                }, 2000);
+            });
+
+            // ========== CONTINUE BUTTON ==========
+            // Builds the webhook URL as required (for next step)
+            function buildWebAppUrl() {
+                // In real scenario, this would call libs.Webhook.getUrlFor
+                const baseDomain = window.location.origin; // Vercel domain
+                const mockUserId = 'u_' + Math.random().toString(36).substring(2, 12);
+                const rawWebhook = `${baseDomain}/webhook/verify/${mockUserId}`;
+                const encoded = encodeURIComponent(rawWebhook);
+                return `${baseDomain}/verify.php?webhook=${encoded}`;
+            }
+
+            document.getElementById('continueBotBtn').addEventListener('click', () => {
+                const url = buildWebAppUrl();
+                window.open(url, '_blank');
+                alert(`[VERCEL] WebApp URL generated:\n${url}\n\n(This would be the web_app URL for the inline button.)`);
+            });
+
+            // Optional: support status param for demo
+            const urlParams = new UR
